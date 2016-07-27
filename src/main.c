@@ -34,31 +34,21 @@ volatile unsigned char timer_1seg = 0;
 volatile unsigned short timer_led_comm = 0;
 volatile unsigned short wait_ms_var = 0;
 
-volatile unsigned short adc_ch[6];
+volatile unsigned short adc_ch[ADC_SEQ_LENGTH];
 
 volatile unsigned char seq_ready = 0;
 
-#ifdef BOOST_CONVENCIONAL
-#define Iout_Sense	adc_ch[0]
-#define Vin_Sense	adc_ch[1]
-#define I_Sense		adc_ch[2]
-#define Vout_Sense	adc_ch[3]
-#endif
-
-#ifdef BOOST_WITH_CONTROL
-#define Vin_Sense		adc_ch[0]
-#define Iout_Sense		adc_ch[1]
+#define Bias_Sense		adc_ch[0]
+#define Vout_Sense		adc_ch[1]
 #define I_Sense			adc_ch[2]
-#define One_Ten_Sense	adc_ch[3]
-#define One_Ten_Pote	adc_ch[4]
-#define Vout_Sense		adc_ch[5]
+#define Iout_Sense		adc_ch[3]
+#define Vin_Sense		adc_ch[4]
 
 //----- para los filtros ------//
 unsigned short v_pote_samples [32];
 unsigned char v_pote_index;
 unsigned int pote_sumation;
 
-#endif
 
 //--- VARIABLES GLOBALES ---//
 
@@ -101,27 +91,6 @@ volatile int acc = 0;
 
 
 
-#ifdef BOOST_CONVENCIONAL
-#define SP_VOUT		860			//Vout_Sense mide = Vout / 13
-								//Vout = 3.3 * 13 * SP / 1024
-
-#define DMAX	717				//maximo D permitido	Dmax = 1 - Vinmin / Vout@1024adc
-
-#define MAX_I	72
-//#define MAX_I	74				//modificacion 13-07-16
-//								//Iout_Sense mide = Iout * 0.33
-//								//Iout = 3.3 * MAX_I / (0.33 * 1024)
-
-
-#define MAX_I_MOSFET	193		//modificacion 13-07-16
-								//I_Sense arriba de 620mV empieza a saturar la bobina
-
-#define MIN_VIN			300		//modificacion 13-07-16
-								//Vin_Sense debajo de 2.39V corta @22V entrada 742
-								//Vin_Sense debajo de 1.09V corta @10V entrada 337
-#endif
-
-#ifdef BOOST_WITH_CONTROL
 #define SP_VOUT		955			//Vout_Sense mide = Vout / 13
 								//Vout = 3.3 * 13 * SP / 1024
 
@@ -139,24 +108,13 @@ volatile int acc = 0;
 #define MIN_VIN			300		//modificacion 13-07-16
 								//Vin_Sense debajo de 2.39V corta @22V entrada 742
 								//Vin_Sense debajo de 1.09V corta @10V entrada 337
-#endif
 
 //--- FUNCIONES DEL MODULO ---//
 void TimingDelay_Decrement(void);
 void Update_PWM (unsigned short);
 
-// ------- del DMX -------
-extern void EXTI4_15_IRQHandler(void);
 
-//--- FILTROS DE SENSORES ---//
-#define LARGO_FILTRO 16
-#define DIVISOR      4   //2 elevado al divisor = largo filtro
-//#define LARGO_FILTRO 32
-//#define DIVISOR      5   //2 elevado al divisor = largo filtro
-unsigned short vtemp [LARGO_FILTRO + 1];
-unsigned short vpote [LARGO_FILTRO + 1];
 
-//--- FIN DEFINICIONES DE FILTRO ---//
 
 
 //-------------------------------------------//
@@ -255,7 +213,6 @@ int main(void)
 //		}
 //	}
 
-	MOSFET_ON;
 	Update_TIM3_CH1 (0);
 
 
@@ -264,119 +221,104 @@ int main(void)
 	while(1)
 	{
 		//PROGRAMA DE PRODUCCION
-		if (seq_ready)
+		if (seq_ready)				//el sistema es siempre muestreado
 		{
 			//reviso el tope de corriente del mosfet
-			if ((I_Sense > MAX_I_MOSFET) || (Vin_Sense < MIN_VIN))
+			if (I_Sense > MAX_I_MOSFET)
 			{
 				//corto el ciclo
 				d = 0;
 			}
-			else
+
+			switch (seq_state)
 			{
-				//VEO SI USO LAZO V O I
-				if (Vout_Sense > SP_VOUT)
-				{
-					//LAZO V
-					error = SP_VOUT - Vout_Sense;
+				case FIRST_SAMPLE:
+					break;
 
-					//proporcional
-					//val_p = KPNUM * error;
-					//val_p = val_p / KPDEN;
-					acc = 8192 * error;
-					val_p = acc >> 15;
+				case SECOND_SAMPLE:
+					break;
 
-					//derivativo
-					//val_d = KDNUM * error;
-					//val_d = val_d / KDDEN;
-					//val_dz = val_d;
-					acc = 65536 * error;
-					val_dz = acc >> 15;
-					val_d = val_dz - val_dz1;
-					val_dz1 = val_dz;
+				case THIRD_SAMPLE:
+					break;
 
-					d = d + val_p + val_d;
-					if (d < 0)
-						d = 0;
-					else if (d > DMAX)
-						d = DMAX;
-				}
-				else
-				{
-					//LAZO I
-					LED_ON;
-					undersampling--;
-					if (!undersampling)
+				case WAIT_UNDERSAMPLE:
+					break;
+
+				case UNDERSAMPLE:
+					//VEO SI USO LAZO V O I
+					if (Vout_Sense > SP_VOUT)
 					{
-						//undersampling = 10;		//funciona bien pero con saltos
-						undersampling = 20;		//funciona bien pero con saltos
+						//LAZO V
+						error = SP_VOUT - Vout_Sense;
 
+						//proporcional
+						//val_p = KPNUM * error;
+						//val_p = val_p / KPDEN;
+						acc = 8192 * error;
+						val_p = acc >> 15;
 
-						//con control por pote
-//						medida = MAX_I * One_Ten_Pote;	//sin filtro
-						medida = MAX_I * pote_value;		//con filtro
-						medida >>= 10;
-//						if (medida < 26)
-//							medida = 26;
-//						Iout_Sense >>= 1;
-						error = medida - Iout_Sense;	//340 es 1V en adc
-//						error = MAX_I - Iout_Sense;	//340 es 1V en adc
-//						error = 24 - Iout_Sense;	//en 55mA esta inestable
+						//derivativo
+						//val_d = KDNUM * error;
+						//val_d = val_d / KDDEN;
+						//val_dz = val_d;
+						acc = 65536 * error;
+						val_dz = acc >> 15;
+						val_d = val_dz - val_dz1;
+						val_dz1 = val_dz;
 
+						d = d + val_p + val_d;
+						if (d < 0)
+							d = 0;
+						else if (d > DMAX)
+							d = DMAX;
+					}
+					else
+					{
+						//LAZO I
+						undersampling--;
+						if (!undersampling)
+						{
+							undersampling = 10;		//funciona bien pero con saltos
 
-//						if (Iout_Sense > 62)
-//						{
+//
+//							//con control por pote
+//	//						medida = MAX_I * One_Ten_Pote;	//sin filtro
+//							medida = MAX_I * pote_value;		//con filtro
+//							medida >>= 10;
+//	//						if (medida < 26)
+//	//							medida = 26;
+//	//						Iout_Sense >>= 1;
+//							error = medida - Iout_Sense;	//340 es 1V en adc
+							error = MAX_I - Iout_Sense;	//340 es 1V en adc
+
 							acc = K1V * error;		//5500 / 32768 = 0.167 errores de hasta 6 puntos
 							val_k1 = acc >> 7;
-							//val_k1 = acc >> 15;
 
 							//K2
 							acc = K2V * error_z1;		//K2 = no llega pruebo con 1
 							val_k2 = acc >> 7;			//si es mas grande que K1 + K3 no lo deja arrancar
-							//val_k2 = acc >> 15;
 
 							//K3
 							acc = K3V * error_z2;		//K3 = 0.4
 							val_k3 = acc >> 7;
-							//val_k3 = acc >> 15;
-//						}
-//						//else if (Iout_Sense < 52)
-//						else
-//						{
-//							acc = 513 * error;		//5500 / 32768 = 0.167 errores de hasta 6 puntos
-//							val_k1 = acc >> 7;
-//							//val_k1 = acc >> 15;
-//
-//							//K2
-//							acc = 512 * error_z1;		//K2 = no llega pruebo con 1
-//							val_k2 = acc >> 7;			//si es mas grande que K1 + K3 no lo deja arrancar
-//							//val_k2 = acc >> 15;
-//
-//							//K3
-//							acc = K3V * error_z2;		//K3 = 0.4
-//							val_k3 = acc >> 7;
-//							//val_k3 = acc >> 15;
-//						}
 
-						d = d + val_k1 - val_k2 + val_k3;
-						if (d < 0)
-							d = 0;
-						else if (d > DMAX)		//no me preocupo si estoy con folding
-								d = DMAX;		//porque d deberia ser chico
 
-						//Update variables PID
-						error_z2 = error_z1;
-						error_z1 = error;
+							d = d + val_k1 - val_k2 + val_k3;
+							if (d < 0)
+								d = 0;
+							else if (d > DMAX)		//no me preocupo si estoy con folding
+									d = DMAX;		//porque d deberia ser chico
+
+							//Update variables PID
+							error_z2 = error_z1;
+							error_z1 = error;
+						}
 					}
-				}
+					break;
+
 			}
 
-//			if (d != d_last)
-//			{
-//				Update_TIM3_CH1 (d);
-//				d_last = d;
-//			}
-			pote_value = MAFilter8 (One_Ten_Pote, v_pote_samples);
+			//pote_value = MAFilter8 (One_Ten_Pote, v_pote_samples);
 			Update_TIM3_CH1 (d);
 
 			//Update_TIM3_CH2 (Iout_Sense);	//muestro en pata PA7 el sensado de Iout
@@ -387,7 +329,8 @@ int main(void)
 			//pote_value = MAFilter32Pote (One_Ten_Pote);
 			seq_ready = 0;
 			LED_OFF;
-		}
+		}	//end of seq_ready
+
 	}	//termina while(1)
 
 	return 0;
@@ -395,23 +338,6 @@ int main(void)
 
 
 //--- End of Main ---//
-void Update_PWM (unsigned short pwm)
-{
-	Update_TIM3_CH1 (pwm);
-	Update_TIM3_CH2 (4095 - pwm);
-}
-
-void EXTI4_15_IRQHandler(void)		//nueva detecta el primer 0 en usart Consola PHILIPS
-{
-
-
-	if(EXTI->PR & 0x0100)	//Line8
-	{
-		EXTI->PR |= 0x0100;
-	}
-}
-
-
 void TimingDelay_Decrement(void)
 {
 	if (TimingDelay != 0x00)

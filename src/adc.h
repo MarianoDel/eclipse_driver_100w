@@ -18,6 +18,8 @@
 
 #define ADC_WITH_INT
 
+#define ADC_SEQ_LENGTH	5
+
 unsigned short ADC_Conf (void);
 unsigned short ReadADC1 (unsigned int);
 unsigned short ReadADC1_SameSampleTime (unsigned int);
