@@ -102,7 +102,7 @@ volatile int acc = 0;
 
 
 
-#define DMAX	800				//maximo D permitido	Dmax = 1 - Vinmin / Vout@1024adc
+#define DMAX	300				//maximo D permitido	Dmax = 1 - Vinmin / Vout@1024adc
 
 #define MAX_I_MOSFET	193		//modificacion 13-07-16
 								//I_Sense arriba de 620mV empieza a saturar la bobina
@@ -179,7 +179,6 @@ int main(void)
 		}
 	}
 
-
 	//TIM Configuration.
 	TIM_3_Init();
 
@@ -208,8 +207,8 @@ int main(void)
 //	}
 
 	Update_TIM3_CH1 (0);
-
-
+	Update_TIM3_CH2 (512);
+	while (1);
 
 	//--- Main loop ---//
 	while(1)
@@ -346,7 +345,8 @@ int main(void)
 #ifdef WITH_PWM_DIRECT
 			else
 			{
-				undersampling--;
+				LED_ON;
+				undersampling--;	//ojo cuando arranca resuelve 255 para abajo
 				if (!undersampling)
 				{
 					undersampling = 10;

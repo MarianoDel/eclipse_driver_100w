@@ -130,9 +130,9 @@ void TIM_3_Init (void)
 	//Configuracion del timer.
 	TIM3->CR1 = 0x00;		//clk int / 1; upcounting
 	TIM3->CR2 |= TIM_CR2_MMS_1;		//UEV -> TRG0
-	TIM3->CCMR1 = 0x0060;			//CH1 output PWM mode 1 CH2 disabled
+	TIM3->CCMR1 = 0x6060;			//CH1 output PWM mode 1 CH2 disabled
 	TIM3->CCMR2 = 0x0000;			//CH4 y CH3 disable
-	TIM3->CCER |= TIM_CCER_CC1P | TIM_CCER_CC1E;	//CH1 enable on pin active low;
+	TIM3->CCER |= TIM_CCER_CC1P | TIM_CCER_CC1E | TIM_CCER_CC2E;	//CH1 enable on pin active low;
 
 	TIM3->ARR = 1023;	//freq 46.8KHz
 	TIM3->CNT = 0;

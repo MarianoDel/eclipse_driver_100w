@@ -69,21 +69,18 @@ void GPIO_Config (void)
 	//10: Pull-down
 	//11: Reserved
 
-#ifdef BOOST_CONVENCIONAL
-#ifdef GPIOA_ENABLE
-
 	//--- GPIO A ---//
 	if (!GPIOA_CLK)
 		GPIOA_CLK_ON;
 
 	temp = GPIOA->MODER;	//2 bits por pin
-	temp &= 0xFFCF0F00;		//PA0 PA1 PA2 (analog input); PA3 out; PA6 PA7(alternative); PA10 out
-	temp |= 0x0010A07F;
+	temp &= 0xFFCF0C00;		//PA0 PA1 PA2 PA3 PA4 (analog input); PA6 PA7(alternative); PA10 out
+	temp |= 0x0010A3FF;
 	GPIOA->MODER = temp;
 
 	temp = GPIOA->OTYPER;	//1 bit por pin
-	temp &= 0xFFFFFFFF;
-	temp |= 0x00000000;
+	temp &= 0xFFFFFF0F;		//PA6 open drain
+	temp |= 0x00000040;
 	GPIOA->OTYPER = temp;
 
 	temp = GPIOA->OSPEEDR;	//2 bits por pin
@@ -96,12 +93,8 @@ void GPIO_Config (void)
 	temp |= 0x00000000;
 	GPIOA->PUPDR = temp;
 
-
-#endif
-
-#ifdef GPIOB_ENABLE
-
 	//--- GPIO B ---//
+#ifdef GPIOB_ENABLE
 	if (!GPIOB_CLK)
 		GPIOB_CLK_ON;
 
@@ -124,9 +117,6 @@ void GPIO_Config (void)
 	temp &= 0xFFFFFFFF;
 	temp |= 0x00000000;
 	GPIOB->PUPDR = temp;
-
-
-#endif
 #endif
 
 #ifdef BOOST_WITH_CONTROL

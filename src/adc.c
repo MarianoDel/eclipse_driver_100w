@@ -145,6 +145,10 @@ void ADC1_COMP_IRQHandler (void)
 		//clear pending
 		ADC1->ISR |= ADC_IT_EOC | ADC_IT_EOSEQ;
 	}
+	if (LED)
+		LED_OFF;
+	else
+		LED_ON;
 }
 #endif
 
