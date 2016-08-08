@@ -96,13 +96,13 @@ void AdcConfig (void)
 	//set channel selection siempre convierte creciente, termina con el canal mas alto de la secuencia
 	//ADC1->CHSELR |= ADC_Channel_0 | ADC_Channel_1 | ADC_Channel_2;
 	//ADC1->CHSELR |= ADC_Channel_1 | ADC_Channel_2;
-	ADC1->CHSELR |= ADC_Channel_0 | ADC_Channel_1 | ADC_Channel_2;		//modificado 20-07-16
-	ADC1->CHSELR |= ADC_Channel_4 | ADC_Channel_5 | ADC_Channel_6;		//Vin_Sense		CH0
-																		//Iout_Sense 	CH1
-																		//I_Sense		CH2
-																		//One_Ten_Sense	CH4
-																		//One_Ten_Pote 	CH5
-																		//Vout_Sense 	CH6
+	ADC1->CHSELR |= ADC_Channel_0 | ADC_Channel_1 | ADC_Channel_2;		//modificado 08-08-16
+	ADC1->CHSELR |= ADC_Channel_3 | ADC_Channel_4;						//Bias_Sense		CH0
+																		//Vout_Sense	 	CH1
+																		//I_Sense			CH2
+																		//Iout_Sense		CH3
+																		//Vin_Sense		 	CH4
+
 
 #ifdef ADC_WITH_INT
 	//set interrupts
@@ -128,7 +128,7 @@ void ADC1_COMP_IRQHandler (void)
 {
 	if (ADC1->ISR & ADC_IT_EOC)
 	{
-		if (ADC1->ISR & ADC_IT_EOSEQ)	//seguro que es channel6
+		if (ADC1->ISR & ADC_IT_EOSEQ)	//seguro que es channel4
 		{
 			p_channel = &adc_ch[ADC_SEQ_LENGTH - 1];
 			*p_channel = ADC1->DR;

@@ -10,6 +10,10 @@
 
 //-------- Board Configuration -----------------------//
 
+//---- Configuracion del PWM -----//
+//#define WITH_DITHER
+#define WITH_PWM_DIRECT
+
 //GPIOA pin0
 //GPIOA pin1
 //GPIOA pin2
@@ -42,6 +46,16 @@
 //GPIOB pin6
 //GPIOB pin7
 
+//---- STATES de las muestras -----//
+#define FIRST_SAMPLE		0
+#define SECOND_SAMPLE		1
+#define THIRD_SAMPLE		2
+#define FOUR_SAMPLE			3
+#define WAIT_UNDERSAMPLE	4
+#define UNDERSAMPLE			5
+
+
 
 
 #endif /* HARD_H_ */
+

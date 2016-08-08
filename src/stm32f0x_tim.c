@@ -148,7 +148,6 @@ void TIM_3_Init (void)
 	//NVIC_InitStructure.NVIC_IRQChannelPriority = 5;
 	//NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	//NVIC_Init(&NVIC_InitStructure);
-
 	//Configuracion Pines
 	//Alternate Fuction
 	GPIOA->AFR[0] = 0x11000000;	//PA7 -> AF1; PA6 -> AF1
