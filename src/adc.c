@@ -138,8 +138,8 @@ void ADC1_COMP_IRQHandler (void)
 		}
 		else
 		{
-			if (p_channel == &adc_ch[2])
-				LED_ON;
+//			if (p_channel == &adc_ch[2])
+//				LED_ON;
 			*p_channel = ADC1->DR;		//
 			if (p_channel < &adc_ch[ADC_SEQ_LENGTH - 1])
 				p_channel++;

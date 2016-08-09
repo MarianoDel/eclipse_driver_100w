@@ -110,7 +110,7 @@ void TIM_1_Init (void)
 	TIM1->CCMR2 = 0x0000;			//
 	TIM1->CCER = 0x0000;
 	//TIM1->ARR = 1024 - 172;	//cada tick 20.83ns; ok la int pero mide mal
-	TIM1->ARR = 1023 - 80 + 26 + 10;	//cada tick 20.83ns; ok pero mide mal + periodo en cycles 7.5 / 14MHz = 535ns
+	TIM1->ARR = 1023 - 390;	//cada tick 20.83ns; ok pero mide mal + periodo en cycles 7.5 / 14MHz = 535ns
 	TIM1->CNT = 0;
 	TIM1->PSC = 0;
 

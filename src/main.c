@@ -78,13 +78,15 @@ volatile int acc = 0;
 
 //AJUSTE DE CORRIENTE DE SALIDA
 //#define MAX_I	305
-//#define MAX_I	280				//da 1.82A salida (tension R17 860mV) ya empieza a ser inestable
-#define MAX_I	244				//da 1.67A salida (tension R17 800mV)
+#define MAX_I	340				//da 1.94A salida (tension R17 860mV)
+//#define MAX_I	305				//da 1.94A salida (tension R17 1060mV)
+//#define MAX_I	280				//da 1.82A salida (tension R17 860mV)
+//#define MAX_I	244				//da 1.67A salida (tension R17 800mV)
 //#define MAX_I	153				//da 1.25A salida (tension R17 480mV)
 //#define MAX_I	75				//da 0.84A salida (tension R17 240mV)
 
-#define KPI	128			//	4
-#define KII	16			//	64 = 0.0156 32, 16
+#define KPI	32			//	0.5
+#define KII	64			//	64 = 0.0156 32, 16
 //#define KPV	0			//	0
 //#define KIV	128			//	1
 #define KDI	0			// 0
@@ -100,7 +102,7 @@ volatile int acc = 0;
 #define DMAX	512				//maximo D permitido	Dmax = 1 - Vinmin / Vout@1024adc
 
 #define MAX_I_OUT		(MAX_I + 80)		//modificacion 13-07-16
-#define MAX_I_MOSFET	193		//modificacion 13-07-16
+#define MAX_I_MOSFET	250		//modificacion 13-07-16
 								//I_Sense arriba de 620mV empieza a saturar la bobina
 
 #define MIN_VIN			300		//modificacion 13-07-16
@@ -342,7 +344,7 @@ int main(void)
 #ifdef WITH_PWM_DIRECT
 			else
 			{
-//				LED_ON;
+				LED_ON;
 				undersampling--;	//ojo cuando arranca resuelve 255 para abajo
 				if (!undersampling)
 				{
@@ -459,8 +461,3 @@ void TimingDelay_Decrement(void)
 	}
 	*/
 }
-
-
-
-
-
