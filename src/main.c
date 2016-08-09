@@ -45,9 +45,9 @@ volatile unsigned char seq_ready = 0;
 #define Vin_Sense		adc_ch[4]
 
 //----- para los filtros ------//
-unsigned short v_pote_samples [32];
-unsigned char v_pote_index;
-unsigned int pote_sumation;
+//unsigned short v_pote_samples [32];
+//unsigned char v_pote_index;
+//unsigned int pote_sumation;
 
 
 //--- VARIABLES GLOBALES ---//
@@ -57,19 +57,13 @@ volatile unsigned short timer_standby;
 volatile unsigned char filter_timer;
 static __IO uint32_t TimingDelay;
 
-volatile unsigned char door_filter;
-volatile unsigned char take_sample;
-volatile unsigned char move_relay;
-
-volatile unsigned char secs = 0;
-volatile unsigned short minutes = 0;
-
 //------- de los PID ---------
 volatile int acc = 0;
 
 //AJUSTE DE TENSION DE SALIDA VACIO
-#define SP_VOUT		400			//Vout_Sense mide = Vout / 13
+#define SP_VOUT		485			//Vout_Sense mide = Vout / 13
 								//Vout = 3.3 * 13 * SP / 1024
+								//400 vout 30,5V
 
 #define KPV	128			//	4
 #define KIV	16			//	64 = 0.0156 32, 16
@@ -83,10 +77,11 @@ volatile int acc = 0;
 #define K3V (KDV)
 
 //AJUSTE DE CORRIENTE DE SALIDA
-#define MAX_I	305
-//#define MAX_I	153				//cuando uso Iot_Sense / 2
-//								//Iout_Sense mide = Iout * 0.33
-//								//Iout = 3.3 * MAX_I / (0.33 * 1024)
+//#define MAX_I	305
+//#define MAX_I	280				//da 1.82A salida (tension R17 860mV) ya empieza a ser inestable
+#define MAX_I	244				//da 1.67A salida (tension R17 800mV)
+//#define MAX_I	153				//da 1.25A salida (tension R17 480mV)
+//#define MAX_I	75				//da 0.84A salida (tension R17 240mV)
 
 #define KPI	128			//	4
 #define KII	16			//	64 = 0.0156 32, 16
@@ -102,8 +97,9 @@ volatile int acc = 0;
 
 
 
-#define DMAX	300				//maximo D permitido	Dmax = 1 - Vinmin / Vout@1024adc
+#define DMAX	512				//maximo D permitido	Dmax = 1 - Vinmin / Vout@1024adc
 
+#define MAX_I_OUT		(MAX_I + 80)		//modificacion 13-07-16
 #define MAX_I_MOSFET	193		//modificacion 13-07-16
 								//I_Sense arriba de 620mV empieza a saturar la bobina
 
@@ -181,6 +177,7 @@ int main(void)
 
 	//TIM Configuration.
 	TIM_3_Init();
+	TIM_1_Init();
 
 	//--- COMIENZO PROGRAMA DE PRODUCCION
 
@@ -207,8 +204,8 @@ int main(void)
 //	}
 
 	Update_TIM3_CH1 (0);
-	Update_TIM3_CH2 (512);
-	while (1);
+	Update_TIM3_CH2 (0);
+	//while (1);
 
 	//--- Main loop ---//
 	while(1)
@@ -217,7 +214,7 @@ int main(void)
 		if (seq_ready)				//el sistema es siempre muestreado
 		{
 			//reviso el tope de corriente del mosfet
-			if (I_Sense > MAX_I_MOSFET)
+			if ((I_Sense > MAX_I_MOSFET) || (Iout_Sense > MAX_I_OUT))
 			{
 				//corto el ciclo
 				d = 0;
@@ -345,7 +342,7 @@ int main(void)
 #ifdef WITH_PWM_DIRECT
 			else
 			{
-				LED_ON;
+//				LED_ON;
 				undersampling--;	//ojo cuando arranca resuelve 255 para abajo
 				if (!undersampling)
 				{
@@ -444,9 +441,6 @@ void TimingDelay_Decrement(void)
 
 	if (timer_standby)
 		timer_standby--;
-
-	if (take_sample)
-		take_sample--;
 
 	if (filter_timer)
 		filter_timer--;

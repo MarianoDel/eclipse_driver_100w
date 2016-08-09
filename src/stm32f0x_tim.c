@@ -104,13 +104,13 @@ void TIM_1_Init (void)
 	//Configuracion del timer.
 	TIM1->CR1 |= TIM_CR1_OPM;		//clk int / 1; upcounting; one pulse
 	TIM1->CR2 |= TIM_CR2_MMS_1;		//UEV -> TRG0
-	TIM1->SMCR |= TIM_SMCR_MSM | TIM_SMCR_SMS_2 | TIM_SMCR_SMS_1 | TIM_SMCR_TS_1;
+	TIM1->SMCR |= TIM_SMCR_MSM | TIM_SMCR_SMS_2 | TIM_SMCR_SMS_1 | TIM_SMCR_TS_1; //synchro; T3; Trigger mode
 	//TIM1->SMCR = 0x0000;
 	TIM1->CCMR1 = 0x0000;			//
 	TIM1->CCMR2 = 0x0000;			//
 	TIM1->CCER = 0x0000;
 	//TIM1->ARR = 1024 - 172;	//cada tick 20.83ns; ok la int pero mide mal
-	TIM1->ARR = 1024 - 80 + 26 + 10;	//cada tick 20.83ns; ok pero mide mal + periodo en cycles 7.5 / 14MHz = 535ns
+	TIM1->ARR = 1023 - 80 + 26 + 10;	//cada tick 20.83ns; ok pero mide mal + periodo en cycles 7.5 / 14MHz = 535ns
 	TIM1->CNT = 0;
 	TIM1->PSC = 0;
 
