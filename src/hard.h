@@ -11,8 +11,8 @@
 //-------- Board Configuration -----------------------//
 
 //---- Configuracion del PWM -----//
-//#define WITH_DITHER
-#define WITH_PWM_DIRECT
+#define WITH_DITHER
+//#define WITH_PWM_DIRECT
 
 //GPIOA pin0
 //GPIOA pin1

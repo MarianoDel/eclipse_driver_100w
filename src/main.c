@@ -78,31 +78,44 @@ volatile int acc = 0;
 
 //AJUSTE DE CORRIENTE DE SALIDA
 //#define MAX_I	305
-#define MAX_I	340				//da 1.94A salida (tension R17 860mV)
+#define MAX_I	340				//da 2.04A salida (tension R17 860mV)
 //#define MAX_I	305				//da 1.94A salida (tension R17 1060mV)
 //#define MAX_I	280				//da 1.82A salida (tension R17 860mV)
 //#define MAX_I	244				//da 1.67A salida (tension R17 800mV)
 //#define MAX_I	153				//da 1.25A salida (tension R17 480mV)
 //#define MAX_I	75				//da 0.84A salida (tension R17 240mV)
 
-#define KPI	32			//	0.5
-#define KII	64			//	64 = 0.0156 32, 16
+#define KPI	16			//	0.5
+#define KII	128			//	64 = 0.0156 32, 16
 //#define KPV	0			//	0
 //#define KIV	128			//	1
 #define KDI	0			// 0
-
 
 #define K1I (KPI + KII + KDI)
 #define K2I (KPI + KDI + KDI)
 #define K3I (KDI)
 
+#define UNDER_FROM_44K		10		//44K / (10 * 4) = 1.1K
 
+//todos se dividen por 128
+#define KPI_DITHER	64			// 0.5
+#define KII_DITHER	128			// 1
+#define KDI_DITHER	4			// 0.03125
+
+#define K1I_DITHER (KPI_DITHER + KII_DITHER + KDI_DITHER)
+#define K2I_DITHER (KPI_DITHER + KDI_DITHER + KDI_DITHER)
+#define K3I_DITHER (KDI_DITHER)
+
+//AJUSTE DE CORRIENTE DE SALIDA DITHER
+#define MAX_I_DITHER	340				//da 2.04A salida (tension R17 860mV)
 
 
 #define DMAX	512				//maximo D permitido	Dmax = 1 - Vinmin / Vout@1024adc
 
+#define DMAX_DITHER		DMAX
+
 #define MAX_I_OUT		(MAX_I + 80)		//modificacion 13-07-16
-#define MAX_I_MOSFET	250		//modificacion 13-07-16
+#define MAX_I_MOSFET	200		//modificacion 13-07-16
 								//I_Sense arriba de 620mV empieza a saturar la bobina
 
 #define MIN_VIN			300		//modificacion 13-07-16
@@ -112,6 +125,7 @@ volatile int acc = 0;
 //--- FUNCIONES DEL MODULO ---//
 void TimingDelay_Decrement(void);
 void Update_PWM (unsigned short);
+short TranslateDither (short, unsigned char);
 
 
 
@@ -129,9 +143,8 @@ int main(void)
 	short d = 0;
 
 #ifdef WITH_DITHER
-	unsigned char seq_state = FIRST_SAMPLE;
-	unsigned char undersample = 0;
-	short d_calc = 0;
+	unsigned char dither_state = 0;
+	short dither = 0;
 #endif
 
 	short error_z1 = 0;
@@ -224,121 +237,102 @@ int main(void)
 #ifdef WITH_DITHER
 			else
 			{
-				d = d_calc;
-				switch (seq_state)
+				//VEO SI USO LAZO V O I
+				if (Vout_Sense > SP_VOUT)
 				{
-					case FIRST_SAMPLE:		//agrego dither en cada ciclo
-						undersample++;
-						if (d & 0x0010)
-							d += 4;
+					//LAZO V
+					error = SP_VOUT - Vout_Sense;
 
-						d >>= 2;
-						break;
+					acc = K1V * error;		//5500 / 32768 = 0.167 errores de hasta 6 puntos
+					val_k1 = acc >> 7;
 
-					case SECOND_SAMPLE:
-						undersample++;
-						if (d & 0x0010)
-							d += 4;
+					//K2
+					acc = K2V * error_z1;		//K2 = no llega pruebo con 1
+					val_k2 = acc >> 7;			//si es mas grande que K1 + K3 no lo deja arrancar
 
-						d >>= 2;
-						break;
+					//K3
+					acc = K3V * error_z2;		//K3 = 0.4
+					val_k3 = acc >> 7;
 
-					case THIRD_SAMPLE:
-						undersample++;
-						if (d & 0x0001)
-							d += 4;
 
-						d >>= 2;
-						break;
+					d = d + val_k1 - val_k2 + val_k3;
 
-					case FOUR_SAMPLE:
-						undersample++;
-						if (d & 0x0001)
-							d += 4;
+					//Update variables PID
+					error_z2 = error_z1;
+					error_z1 = error;
 
-						d >>= 2;
-						break;
-
-					case UNDERSAMPLE:
-						undersample++;
-						if (undersample > 10)
-						{
-							//VEO SI USO LAZO V O I
-							if (Vout_Sense > SP_VOUT)
+				}
+				else
+				{
+					//LAZO I
+					LED_ON;
+					switch (dither_state)
+					{
+						case 0:
+							//empieza o termina la secuencia de dither
+							if (undersampling)
 							{
-								//LAZO V
-								error = SP_VOUT - Vout_Sense;
-
-								//proporcional
-								//val_p = KPNUM * error;
-								//val_p = val_p / KPDEN;
-								acc = 8192 * error;
-								val_p = acc >> 15;
-
-								//derivativo
-								//val_d = KDNUM * error;
-								//val_d = val_d / KDDEN;
-								//val_dz = val_d;
-								acc = 65536 * error;
-								val_dz = acc >> 15;
-								val_d = val_dz - val_dz1;
-								val_dz1 = val_dz;
-
-								d = d + val_p + val_d;
-								if (d < 0)
-									d = 0;
-								else if (d > DMAX)
-									d = DMAX;
+								undersampling--;
 							}
 							else
 							{
-								//LAZO I
-								undersampling--;
-								if (!undersampling)
-								{
-									undersampling = 10;		//funciona bien pero con saltos
+								undersampling = UNDER_FROM_44K;		//serian 10 * 4 = 40
 
-									//
-									//							//con control por pote
-									//	//						medida = MAX_I * One_Ten_Pote;	//sin filtro
-									//							medida = MAX_I * pote_value;		//con filtro
-									//							medida >>= 10;
-									//	//						if (medida < 26)
-									//	//							medida = 26;
-									//	//						Iout_Sense >>= 1;
-									//							error = medida - Iout_Sense;	//340 es 1V en adc
-									error = MAX_I - Iout_Sense;	//340 es 1V en adc
+								error = MAX_I_DITHER - Iout_Sense;	//340 es 1V en adc
 
-									acc = K1V * error;		//5500 / 32768 = 0.167 errores de hasta 6 puntos
-									val_k1 = acc >> 7;
+								acc = K1I_DITHER * error;		//5500 / 32768 = 0.167 errores de hasta 6 puntos
+								val_k1 = acc >> 7;
 
-									//K2
-									acc = K2V * error_z1;		//K2 = no llega pruebo con 1
-									val_k2 = acc >> 7;			//si es mas grande que K1 + K3 no lo deja arrancar
+								//K2
+								acc = K2I_DITHER * error_z1;		//K2 = no llega pruebo con 1
+								val_k2 = acc >> 7;			//si es mas grande que K1 + K3 no lo deja arrancar
 
-									//K3
-									acc = K3V * error_z2;		//K3 = 0.4
-									val_k3 = acc >> 7;
+								//K3
+								acc = K3I_DITHER * error_z2;		//K3 = 0.4
+								val_k3 = acc >> 7;
 
+								dither = dither + val_k1 - val_k2 + val_k3;
+								if (dither < 0)
+									dither = 0;
+								else if (dither > DMAX_DITHER)		//no me preocupo si estoy con folding
+									dither = DMAX_DITHER;		//porque d deberia ser chico
 
-									d = d + val_k1 - val_k2 + val_k3;
-									if (d < 0)
-										d = 0;
-									else if (d > DMAX)		//no me preocupo si estoy con folding
-										d = DMAX;		//porque d deberia ser chico
-
-									//Update variables PID
-									error_z2 = error_z1;
-									error_z1 = error;
-								}
+								//Update variables PID
+								error_z2 = error_z1;
+								error_z1 = error;
 							}
-						}
-						break;
 
-					default:
-						seq_state = FIRST_SAMPLE;
-						break;
-				}	//fin switch samples
+							d = TranslateDither (dither, 0);
+							dither_state++;
+							break;
+
+						case 1:
+							d = TranslateDither (dither, 1);
+							dither_state++;
+							break;
+
+						case 2:
+							d = TranslateDither (dither, 2);
+							dither_state++;
+							break;
+
+						case 3:
+							d = TranslateDither (dither, 3);
+							dither_state = 0;
+							break;
+
+						default:
+							dither_state = 0;
+							break;
+
+					}	//fin switch dither
+				}	//fin lazo V o I
+
+				if (d < 0)
+					d = 0;
+				else if (d > DMAX)		//no me preocupo si estoy con folding
+					d = DMAX;		//porque d deberia ser chico
+
 			}	//fin else I_MAX
 #endif
 #ifdef WITH_PWM_DIRECT
@@ -348,7 +342,7 @@ int main(void)
 				undersampling--;	//ojo cuando arranca resuelve 255 para abajo
 				if (!undersampling)
 				{
-					undersampling = 10;
+					undersampling = 5;
 
 					//VEO SI USO LAZO V O I
 					if (Vout_Sense > SP_VOUT)
@@ -431,6 +425,44 @@ int main(void)
 
 
 //--- End of Main ---//
+
+unsigned char first_pattern [4] = {0x01, 0x01, 0x01, 0x01};
+unsigned char second_pattern [4] = {0x01, 0x01, 0x01, 0x00};
+unsigned char third_pattern [4] = {0x01, 0x00, 0x01, 0x00};
+unsigned char fourth_pattern [4] = {0x00, 0x00, 0x00, 0x01};
+
+//recibe un numero de 12 bits y un estado de 4 posibilidades
+//devuelve un numero de 10bits
+//con los ultimos 2 bits elijo el patron y el state es el que lo recorre
+short TranslateDither (short duty_dither, unsigned char state)
+{
+	unsigned short duty = 0;
+	unsigned short dith = 0;
+
+	dith = duty_dither & 0x0003;
+
+	if (dith == 0x0003)
+	{
+		duty = first_pattern[state];
+	}
+	else if (dith == 0x0002)
+	{
+		duty = second_pattern[state];
+	}
+	else if (dith == 0x0001)
+	{
+		duty = third_pattern[state];
+	}
+	else
+	{
+		duty = fourth_pattern[state];
+	}
+
+	duty += duty_dither >> 2;
+
+	return duty;
+}
+
 void TimingDelay_Decrement(void)
 {
 	if (TimingDelay != 0x00)
