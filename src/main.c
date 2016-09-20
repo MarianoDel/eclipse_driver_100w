@@ -85,11 +85,11 @@ volatile int acc = 0;
 //#define MAX_I	153				//da 1.25A salida (tension R17 480mV)
 //#define MAX_I	75				//da 0.84A salida (tension R17 240mV)
 
-#define KPI	16			//	0.5
+#define KPI	64			//	0.5
 #define KII	128			//	64 = 0.0156 32, 16
 //#define KPV	0			//	0
 //#define KIV	128			//	1
-#define KDI	0			// 0
+#define KDI	4			// 0
 
 #define K1I (KPI + KII + KDI)
 #define K2I (KPI + KDI + KDI)
@@ -98,25 +98,33 @@ volatile int acc = 0;
 #define UNDER_FROM_44K		10		//44K / (10 * 4) = 1.1K
 
 //todos se dividen por 128
-#define KPI_DITHER	64			// 0.5
-#define KII_DITHER	128			// 1
-#define KDI_DITHER	4			// 0.03125
+#define KPI_DITHER	128			// 1
+//#define KPI_DITHER	16			// 0.125
+#define KII_DITHER	0			// 1
+#define KDI_DITHER	0			// 0.03125
+//#define KDI_DITHER	0
 
 #define K1I_DITHER (KPI_DITHER + KII_DITHER + KDI_DITHER)
 #define K2I_DITHER (KPI_DITHER + KDI_DITHER + KDI_DITHER)
 #define K3I_DITHER (KDI_DITHER)
 
 //AJUSTE DE CORRIENTE DE SALIDA DITHER
-#define MAX_I_DITHER	340				//da 2.04A salida (tension R17 860mV)
+//#define MAX_I_DITHER	340				//da 2.04A salida (tension R17 1V)
+#define MAX_I_DITHER	380				//da 2.25A salida (tension R17 1.24V)
+//#define MAX_I_DITHER	400				//da 2.34A salida
+//#define MAX_I_DITHER	420				//da 2.34A salida
 
 
 #define DMAX	512				//maximo D permitido	Dmax = 1 - Vinmin / Vout@1024adc
 
-#define DMAX_DITHER		DMAX
+#define DMAX_DITHER		(DMAX * 4)
 
-#define MAX_I_OUT		(MAX_I + 80)		//modificacion 13-07-16
-#define MAX_I_MOSFET	200		//modificacion 13-07-16
-								//I_Sense arriba de 620mV empieza a saturar la bobina
+#define MAX_I_OUT				(MAX_I + 80)		//modificacion 13-07-16
+#define MAX_I_OUT_DITHER		(MAX_I_DITHER + 80)		//modificacion 19-09-16
+#define MAX_I_MOSFET	200		//modificacion 19-09-16
+								//I_Sense en 200 => 680mV OK
+								//I_Sense en 244 => 1000mVpeak OK
+								//I_Sense en 294 => 1000mV permite ciclo muy alto y repite 2
 
 #define MIN_VIN			300		//modificacion 13-07-16
 								//Vin_Sense debajo de 2.39V corta @22V entrada 742
@@ -141,6 +149,8 @@ int main(void)
 	unsigned char i;
 	short error = 0;
 	short d = 0;
+	SoftStart softstart_state = SOFT_INIT;
+	unsigned short softstart_counter = 0;
 
 #ifdef WITH_DITHER
 	unsigned char dither_state = 0;
@@ -229,10 +239,17 @@ int main(void)
 		if (seq_ready)				//el sistema es siempre muestreado
 		{
 			//reviso el tope de corriente del mosfet
+#ifdef WITH_DITHER
+			if ((I_Sense > MAX_I_MOSFET) || (Iout_Sense > MAX_I_OUT_DITHER))
+#endif
+#ifdef WITH_PWM_DIRECT
 			if ((I_Sense > MAX_I_MOSFET) || (Iout_Sense > MAX_I_OUT))
+#endif
+
 			{
 				//corto el ciclo
 				d = 0;
+				dither = 0;
 			}
 #ifdef WITH_DITHER
 			else
@@ -292,10 +309,12 @@ int main(void)
 								val_k3 = acc >> 7;
 
 								dither = dither + val_k1 - val_k2 + val_k3;
-								if (dither < 0)
-									dither = 0;
-								else if (dither > DMAX_DITHER)		//no me preocupo si estoy con folding
-									dither = DMAX_DITHER;		//porque d deberia ser chico
+
+								//AHORA VERIFICO JUNTO CON d MAS ABAJO
+//								if (dither < 0)
+//									dither = 0;
+//								else if (dither > DMAX_DITHER)		//no me preocupo si estoy con folding
+//									dither = DMAX_DITHER;		//porque d deberia ser chico
 
 								//Update variables PID
 								error_z2 = error_z1;
@@ -329,9 +348,47 @@ int main(void)
 				}	//fin lazo V o I
 
 				if (d < 0)
+				{
 					d = 0;
-				else if (d > DMAX)		//no me preocupo si estoy con folding
-					d = DMAX;		//porque d deberia ser chico
+					dither = 0;
+				}
+				else
+				{
+					switch (softstart_state)
+					{
+						case SOFT_INIT:
+							if (d > 50)
+							{
+								d = 50;
+								dither = 200;
+							}
+							break;
+
+						case SOFT_LOW_VIN:
+							if (d > 100)
+							{
+								d = 100;
+								dither = 400;
+							}
+							break;
+
+						case SOFT_MED_VIN:
+							if (d > 150)
+							{
+								d = 150;
+								dither = 600;
+							}
+							break;
+
+						case SOFT_RUN:
+							if (d > DMAX)		//no me preocupo si estoy con folding
+							{
+								d = DMAX;		//porque d deberia ser chico
+								dither = DMAX_DITHER;
+							}
+							break;
+					}
+				}
 
 			}	//fin else I_MAX
 #endif
@@ -416,7 +473,70 @@ int main(void)
 			//pote_value = MAFilter32Pote (One_Ten_Pote);
 			seq_ready = 0;
 			LED_OFF;
+
+			//Cosas que tienen que ver con las muestras y no con el PID
+			switch (softstart_state)
+			{
+				case SOFT_INIT:
+					if (Vout_Sense > VOUT_MIN)
+					{
+						if (softstart_counter > 4400)
+						{
+							softstart_state = SOFT_LOW_VIN;
+							softstart_counter = 0;
+						}
+						else
+							softstart_counter++;
+					}
+					break;
+
+				case SOFT_LOW_VIN:
+					if (Vout_Sense > VOUT_LOW)
+					{
+						if (softstart_counter > 4400)
+						{
+							softstart_state = SOFT_MED_VIN;
+							softstart_counter = 0;
+						}
+						else
+							softstart_counter++;
+					}
+					break;
+
+				case SOFT_MED_VIN:
+					if (Vout_Sense > VOUT_MED)
+					{
+						if (softstart_counter > 4400)
+						{
+							softstart_state = SOFT_RUN;
+							softstart_counter = 0;
+						}
+						else
+							softstart_counter++;
+					}
+					break;
+
+				case SOFT_RUN:
+					if (Vout_Sense < VOUT_LOW)
+					{
+						if (softstart_counter > 4400)
+						{
+							softstart_state = SOFT_LOW_VIN;
+							softstart_counter = 0;
+						}
+						else
+							softstart_counter++;
+					}
+					break;
+
+				default:
+					softstart_state = SOFT_INIT;
+					break;
+			}
+
 		}	//end of seq_ready
+
+		//Cosas que no tienen que ver con las muestras
 
 	}	//termina while(1)
 

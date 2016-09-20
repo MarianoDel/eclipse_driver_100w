@@ -14,6 +14,20 @@
 #define WITH_DITHER
 //#define WITH_PWM_DIRECT
 
+//---- Defines for SoftStart -----//
+enum {
+	SOFT_INIT = 0,
+	SOFT_LOW_VIN,
+	SOFT_MED_VIN,
+	SOFT_RUN
+
+} typedef SoftStart;
+
+#define VOUT_MIN	129		//10V
+#define VOUT_LOW	193		//15V
+#define VOUT_MED	258		//20V
+
+//---- IO Configuration -----//
 //GPIOA pin0
 //GPIOA pin1
 //GPIOA pin2
