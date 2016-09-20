@@ -95,18 +95,18 @@ volatile int acc = 0;
 #define K2I (KPI + KDI + KDI)
 #define K3I (KDI)
 
-#define UNDER_FROM_44K		10		//44K / (10 * 4) = 1.1K
+#define UNDERSAMPLING_FROM_44K		1100		//44K / (110 * 4) = 10Hz
 
 //todos se dividen por 128
-#define KPI_DITHER	128			// 1
-//#define KPI_DITHER	16			// 0.125
-#define KII_DITHER	0			// 1
-#define KDI_DITHER	0			// 0.03125
+#define KPI_DITHER	16			// 0.125
+#define KII_DITHER	128			// 1
+#define KDI_DITHER	69			// 0.539
 //#define KDI_DITHER	0
 
-#define K1I_DITHER (KPI_DITHER + KII_DITHER + KDI_DITHER)
-#define K2I_DITHER (KPI_DITHER + KDI_DITHER + KDI_DITHER)
-#define K3I_DITHER (KDI_DITHER)
+#define K1I_DITHER 		(KPI_DITHER + KDI_DITHER)
+#define K1I_DITHER_WINT (KPI_DITHER + KII_DITHER + KDI_DITHER)
+#define K2I_DITHER 		(KPI_DITHER + KDI_DITHER + KDI_DITHER)
+#define K3I_DITHER 		(KDI_DITHER)
 
 //AJUSTE DE CORRIENTE DE SALIDA DITHER
 //#define MAX_I_DITHER	340				//da 2.04A salida (tension R17 1V)
@@ -164,7 +164,7 @@ int main(void)
 	short val_k2 = 0;
 	short val_k3 = 0;
 
-	unsigned char undersampling = 0;
+	unsigned short undersampling = 0;
 
 //	unsigned char last_main_overload  = 0;
 //	unsigned char last_function;
@@ -245,7 +245,6 @@ int main(void)
 #ifdef WITH_PWM_DIRECT
 			if ((I_Sense > MAX_I_MOSFET) || (Iout_Sense > MAX_I_OUT))
 #endif
-
 			{
 				//corto el ciclo
 				d = 0;
@@ -287,39 +286,40 @@ int main(void)
 					{
 						case 0:
 							//empieza o termina la secuencia de dither
+
+							error = MAX_I_DITHER - Iout_Sense;	//340 es 1V en adc
+
+							//K1
 							if (undersampling)
 							{
 								undersampling--;
+
+								//K1 sin Integral
+								acc = K1I_DITHER * error;		//5500 / 32768 = 0.167 errores de hasta 6 puntos
+								val_k1 = acc >> 7;
 							}
 							else
 							{
-								undersampling = UNDER_FROM_44K;		//serian 10 * 4 = 40
+								undersampling = UNDERSAMPLING_FROM_44K;		//serian 1100 * 4 = 4400 => 10Hz
 
-								error = MAX_I_DITHER - Iout_Sense;	//340 es 1V en adc
-
-								acc = K1I_DITHER * error;		//5500 / 32768 = 0.167 errores de hasta 6 puntos
+								//K1 con Integral
+								acc = K1I_DITHER_WINT * error;
 								val_k1 = acc >> 7;
-
-								//K2
-								acc = K2I_DITHER * error_z1;		//K2 = no llega pruebo con 1
-								val_k2 = acc >> 7;			//si es mas grande que K1 + K3 no lo deja arrancar
-
-								//K3
-								acc = K3I_DITHER * error_z2;		//K3 = 0.4
-								val_k3 = acc >> 7;
-
-								dither = dither + val_k1 - val_k2 + val_k3;
-
-								//AHORA VERIFICO JUNTO CON d MAS ABAJO
-//								if (dither < 0)
-//									dither = 0;
-//								else if (dither > DMAX_DITHER)		//no me preocupo si estoy con folding
-//									dither = DMAX_DITHER;		//porque d deberia ser chico
-
-								//Update variables PID
-								error_z2 = error_z1;
-								error_z1 = error;
 							}
+
+							//K2
+							acc = K2I_DITHER * error_z1;	//si es mas grande que K1 + K3 no lo deja arrancar
+							val_k2 = acc >> 7;
+
+							//K3
+							acc = K3I_DITHER * error_z2;
+							val_k3 = acc >> 7;
+
+							dither = dither + val_k1 - val_k2 + val_k3;
+
+							//Update variables PID
+							error_z2 = error_z1;
+							error_z1 = error;
 
 							d = TranslateDither (dither, 0);
 							dither_state++;
