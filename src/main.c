@@ -89,19 +89,20 @@ volatile int acc = 0;
 #define KII	128			//	64 = 0.0156 32, 16
 //#define KPV	0			//	0
 //#define KIV	128			//	1
-#define KDI	4			// 0
+#define KDI	0			// 0
 
 #define K1I (KPI + KII + KDI)
 #define K2I (KPI + KDI + KDI)
 #define K3I (KDI)
 
-#define UNDERSAMPLING_FROM_44K		1100		//44K / (110 * 4) = 10Hz
+#define UNDERSAMPLING_FROM_44K		11		//44K / (110 * 4) = 10Hz
 
 //todos se dividen por 128
-#define KPI_DITHER	16			// 0.125
+#define KPI_DITHER	32			// 0.125
 #define KII_DITHER	128			// 1
-#define KDI_DITHER	69			// 0.539
-//#define KDI_DITHER	0
+//#define KDI_DITHER	69			// 0.539	a veces no arranca
+//#define KDI_DITHER	0			//arranca
+#define KDI_DITHER	64			//arranca
 
 #define K1I_DITHER 		(KPI_DITHER + KDI_DITHER)
 #define K1I_DITHER_WINT (KPI_DITHER + KII_DITHER + KDI_DITHER)
@@ -110,7 +111,7 @@ volatile int acc = 0;
 
 //AJUSTE DE CORRIENTE DE SALIDA DITHER
 //#define MAX_I_DITHER	340				//da 2.04A salida (tension R17 1V)
-#define MAX_I_DITHER	380				//da 2.25A salida (tension R17 1.24V)
+#define MAX_I_DITHER	440				//da 2.25A salida (tension R17 1.24V)
 //#define MAX_I_DITHER	400				//da 2.34A salida
 //#define MAX_I_DITHER	420				//da 2.34A salida
 
@@ -240,7 +241,8 @@ int main(void)
 		{
 			//reviso el tope de corriente del mosfet
 #ifdef WITH_DITHER
-			if ((I_Sense > MAX_I_MOSFET) || (Iout_Sense > MAX_I_OUT_DITHER))
+			//if ((I_Sense > MAX_I_MOSFET) || (Iout_Sense > MAX_I_OUT_DITHER))
+			if (I_Sense > MAX_I_MOSFET)
 #endif
 #ifdef WITH_PWM_DIRECT
 			if ((I_Sense > MAX_I_MOSFET) || (Iout_Sense > MAX_I_OUT))
@@ -347,7 +349,7 @@ int main(void)
 					}	//fin switch dither
 				}	//fin lazo V o I
 
-				if (d < 0)
+				if ((d < 0) || (d == 0))	//lo pudo haber puesto en 0 TranslateDither
 				{
 					d = 0;
 					dither = 0;
@@ -389,7 +391,6 @@ int main(void)
 							break;
 					}
 				}
-
 			}	//fin else I_MAX
 #endif
 #ifdef WITH_PWM_DIRECT
@@ -472,7 +473,7 @@ int main(void)
 			//pote_value = MAFilter8 (One_Ten_Pote, v_pote_samples);
 			//pote_value = MAFilter32Pote (One_Ten_Pote);
 			seq_ready = 0;
-			LED_OFF;
+			//LED_OFF;
 
 			//Cosas que tienen que ver con las muestras y no con el PID
 			switch (softstart_state)
@@ -533,6 +534,7 @@ int main(void)
 					softstart_state = SOFT_INIT;
 					break;
 			}
+			LED_OFF;
 
 		}	//end of seq_ready
 
@@ -558,6 +560,9 @@ short TranslateDither (short duty_dither, unsigned char state)
 {
 	unsigned short duty = 0;
 	unsigned short dith = 0;
+
+	if (duty_dither < 0)
+		return 0;
 
 	dith = duty_dither & 0x0003;
 
